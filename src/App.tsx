@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Link, NavLink, Route, Routes } from 'react-router-dom'
-import About from './pages/About'
+import AuthButton from './components/AuthButton'
+import AllLinks from './pages/AllLinks'
+import EditLink from './pages/EditLink'
 import Home from './pages/Home'
-import NotFound from './pages/NotFound'
+import Resolve from './pages/Resolve'
+import Settings from './pages/Settings'
 
 function App() {
   const [dark, setDark] = useState(() =>
@@ -18,8 +21,8 @@ function App() {
       <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 transition-colors">
         <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
           <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-            <Link to="/" className="font-semibold text-lg hover:opacity-75 transition-opacity">
-              My App
+            <Link to="/" className="font-semibold text-lg font-mono hover:opacity-75 transition-opacity">
+              go/
             </Link>
             <div className="flex items-center gap-6">
               <nav className="flex gap-6 text-sm">
@@ -35,16 +38,27 @@ function App() {
                   Home
                 </NavLink>
                 <NavLink
-                  to="/about"
+                  to="/-/all"
                   className={({ isActive }) =>
                     isActive
                       ? 'text-gray-900 dark:text-gray-100 font-medium'
                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors'
                   }
                 >
-                  About
+                  All links
+                </NavLink>
+                <NavLink
+                  to="/-/settings"
+                  className={({ isActive }) =>
+                    isActive
+                      ? 'text-gray-900 dark:text-gray-100 font-medium'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors'
+                  }
+                >
+                  Settings
                 </NavLink>
               </nav>
+              <AuthButton />
               <button
                 onClick={() => setDark((d) => !d)}
                 aria-label="Toggle dark mode"
@@ -67,13 +81,15 @@ function App() {
         <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-16">
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/about" element={<About />} />
-            <Route path="*" element={<NotFound />} />
+            <Route path="/-/all" element={<AllLinks />} />
+            <Route path="/-/edit/*" element={<EditLink />} />
+            <Route path="/-/settings" element={<Settings />} />
+            <Route path="/*" element={<Resolve />} />
           </Routes>
         </main>
 
         <footer className="border-t border-gray-200 dark:border-gray-800 text-center text-xs text-gray-400 dark:text-gray-600 py-6">
-          © {new Date().getFullYear()} My App. All rights reserved.
+          go.mhiebl.com — personal golinks
         </footer>
       </div>
     </BrowserRouter>
