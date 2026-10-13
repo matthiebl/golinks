@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Custom Go Links",
+  "version": "1.1",
+  "omnibox": { "keyword": "go" },
+  "background": { "service_worker": "background.js" },
+  "permissions": ["declarativeNetRequest"],
+  "host_permissions": ["*://go/*", "https://www.google.com/*"],
+  "declarative_net_request": {
+    "rule_resources": [{ "id": "golinks", "enabled": true, "path": "rules.json" }]
+  }
+}

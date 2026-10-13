@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "condition": {
+      "regexFilter": "^https?://go/(.*)",
+      "resourceTypes": ["main_frame"]
+    },
+    "action": {
+      "type": "redirect",
+      "redirect": { "regexSubstitution": "https://go.mhiebl.com/\\1" }
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "condition": {
+      "regexFilter": "^https://www\\.google\\.com/search\\?(?:[^#]*&)?q=go%2F([^&#]*)",
+      "resourceTypes": ["main_frame"]
+    },
+    "action": {
+      "type": "redirect",
+      "redirect": { "regexSubstitution": "https://go.mhiebl.com/?q=\\1" }
+    }
+  }
+]
