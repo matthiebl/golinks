@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { bumpHit } from '../lib/links'
+import { queueHit } from '../lib/pendingHits'
 import { googleSearchUrl, resolveQuery, type Lookup } from '../lib/resolve'
 import type { Link } from '../lib/links'
 
@@ -9,7 +9,7 @@ type SearchBarProps = {
 }
 
 function go(url: string, keyword: string) {
-  bumpHit(keyword)
+  queueHit(keyword)
   window.location.href = url
 }
 

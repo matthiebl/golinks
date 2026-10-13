@@ -1,6 +1,11 @@
 // A small localStorage cache of the full link set (~100 links at this
 // service's scale) so redirects can happen synchronously on a warm cache
 // instead of waiting on a Firestore round-trip on every navigation.
+//
+// Entries never expire: a cache hit always redirects, however old. The cache
+// is refreshed whenever the app loads its live link list, and on any miss
+// (see redirectFlow.ts), so the only staleness is a link edited on another
+// device redirecting to its old URL until this browser next refreshes.
 
 export type CachedLink = {
   keyword: string
@@ -10,7 +15,6 @@ export type CachedLink = {
 }
 
 const CACHE_KEY = 'golinks.cache.v1'
-const TTL_MS = 10 * 60 * 1000 // 10 minutes
 
 type CacheEntry = { at: number; links: CachedLink[] }
 
@@ -29,7 +33,6 @@ export function readCache(): CachedLink[] | null {
     if (!raw) return null
     const entry = JSON.parse(raw) as CacheEntry
     if (!entry || !Array.isArray(entry.links)) return null
-    if (Date.now() - entry.at > TTL_MS) return null
     return entry.links
   } catch {
     return null

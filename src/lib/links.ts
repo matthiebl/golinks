@@ -3,13 +3,15 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   increment,
   onSnapshot,
   serverTimestamp,
   setDoc,
-  type Timestamp,
+  Timestamp,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { requeueHits, takePendingHits, type PendingHits } from './pendingHits'
 
 export type Link = {
   keyword: string
@@ -132,17 +134,39 @@ export async function deleteLink(keyword: string): Promise<void> {
   await deleteDoc(doc(db, COLLECTION, encodeKey(keyword)))
 }
 
-// Fire-and-forget usage tracking. Never awaited by callers on the redirect
-// path — a failure here must never delay or block a redirect.
-export function bumpHit(keyword: string): void {
-  const ref = doc(db, COLLECTION, encodeKey(keyword))
-  setDoc(
-    ref,
-    { hits: increment(1), lastUsedAt: serverTimestamp() },
-    { merge: true },
-  ).catch(() => {
-    // Best-effort only.
-  })
+export async function fetchAllLinks(): Promise<Link[]> {
+  const snapshot = await getDocs(collection(db, COLLECTION))
+  return snapshot.docs.map((d) => linkFromSnapshot(d.id, d.data()))
+}
+
+// Writes hits queued by redirects (see pendingHits.ts). Called once when the
+// app loads. Each hit is its own +1 write because firestore.rules only lets
+// an unauthenticated visitor bump `hits` by exactly one.
+export async function flushPendingHits(): Promise<void> {
+  const pending = takePendingHits()
+  const failed: PendingHits = {}
+
+  for (const [keyword, { count, lastUsedAt }] of Object.entries(pending)) {
+    const ref = doc(db, COLLECTION, encodeKey(keyword))
+    let done = 0
+    try {
+      for (; done < count; done++) {
+        await setDoc(
+          ref,
+          { hits: increment(1), lastUsedAt: Timestamp.fromMillis(lastUsedAt) },
+          { merge: true },
+        )
+      }
+    } catch (err) {
+      // permission-denied means the link was deleted (the merge would be a
+      // create, which only the owner may do) — drop those hits for good.
+      if ((err as { code?: string }).code !== 'permission-denied') {
+        failed[keyword] = { count: count - done, lastUsedAt }
+      }
+    }
+  }
+
+  if (Object.keys(failed).length > 0) requeueHits(failed)
 }
 
 export function subscribeLinks(
