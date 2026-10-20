@@ -4,7 +4,7 @@ import LinkTree from './LinkTree'
 import type { Link } from '../lib/links'
 
 function redirect(keyword: string): Link {
-  return { keyword, kind: 'redirect', url: 'https://example.com', description: '', createdAt: null, updatedAt: null, lastUsedAt: null, hits: 0 }
+  return { keyword, kind: 'redirect', url: 'https://example.com', target: '', description: '', createdAt: null, updatedAt: null, lastUsedAt: null, hits: 0 }
 }
 
 describe('nested tree view', () => {
@@ -34,5 +34,14 @@ describe('nested tree view', () => {
     expect(html).toContain('Open go/work')
     expect(html).toContain('Open go/work/docs')
     expect(html).not.toContain('<button')
+  })
+
+  it('shows an alias target and opens the alias path', () => {
+    const html = renderToStaticMarkup(<LinkTree links={[
+      redirect('youtube'),
+      { ...redirect('stream/yt'), kind: 'alias', url: '', target: 'youtube' },
+    ]} isOwner={false} />)
+    expect(html).toContain('href="/stream/yt"')
+    expect(html).toContain('go/youtube')
   })
 })

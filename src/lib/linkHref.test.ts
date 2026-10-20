@@ -10,4 +10,8 @@ describe('linkHref', () => {
   it('opens groups at their tree page', () => {
     expect(linkHref({ keyword: 'work/docs', kind: 'tree', url: '' })).toBe('/work/docs')
   })
+
+  it('opens aliases through their own go path', () => {
+    expect(linkHref({ keyword: 'yt', kind: 'alias', url: '', target: 'youtube' })).toBe('/yt')
+  })
 })

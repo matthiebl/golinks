@@ -200,3 +200,30 @@ describe('tree links', () => {
     })
   })
 })
+
+describe('aliases', () => {
+  const links: CachedLink[] = [
+    { keyword: 'youtube', kind: 'redirect', url: 'https://youtube.com/{*}', description: '', hits: 0 },
+    { keyword: 'yt', kind: 'alias', url: '', target: 'youtube', description: '', hits: 0 },
+    { keyword: 'stream/disney', kind: 'alias', url: '', target: 'disney', description: '', hits: 0 },
+  ]
+  const lookup: Lookup = (key) => buildLookupMap(links).get(key)
+
+  it('uses the target URL and attributes hits to the alias', () => {
+    expect(resolvePath('/yt/cats', lookup)).toEqual({ type: 'redirect', url: 'https://youtube.com/cats', matchedKeyword: 'yt' })
+    expect(resolveQuery('yt funny cats', lookup)).toEqual({ type: 'redirect', url: 'https://youtube.com/funny%20cats', matchedKeyword: 'yt' })
+  })
+
+  it('reports a deleted or invalid target', () => {
+    expect(resolvePath('/stream/disney', lookup)).toEqual({ type: 'broken-alias', keyword: 'stream/disney', target: 'disney' })
+    const targetIsAlias: Lookup = (key) => key === 'youtube' ? links[1] : lookup(key)
+    expect(resolvePath('/yt', targetIsAlias)).toEqual({ type: 'broken-alias', keyword: 'yt', target: 'youtube' })
+  })
+
+  it('follows updates to the target URL', () => {
+    const updated: Lookup = (key) => key === 'youtube'
+      ? { keyword: 'youtube', kind: 'redirect', url: 'https://new.example/%s' }
+      : lookup(key)
+    expect(resolvePath('/yt/cats', updated)).toEqual({ type: 'redirect', url: 'https://new.example/cats', matchedKeyword: 'yt' })
+  })
+})

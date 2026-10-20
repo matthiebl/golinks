@@ -15,6 +15,7 @@ export function useLinks() {
       keyword: c.keyword,
       kind: c.kind,
       url: c.url,
+      target: c.target ?? '',
       description: c.description,
       hits: c.hits,
       createdAt: null,
@@ -35,6 +36,7 @@ export function useLinks() {
           keyword: l.keyword,
           kind: l.kind,
           url: l.url,
+          target: l.target,
           description: l.description,
           hits: l.hits,
         }))
@@ -49,7 +51,7 @@ export function useLinks() {
   }, [])
 
   const lookupMap = buildLookupMap(
-    links.map((l) => ({ keyword: l.keyword, kind: l.kind, url: l.url, description: l.description, hits: l.hits })),
+    links.map((l) => ({ keyword: l.keyword, kind: l.kind, url: l.url, target: l.target, description: l.description, hits: l.hits })),
   )
 
   return { links, loading, error, lookupMap }

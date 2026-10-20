@@ -9,8 +9,9 @@
 
 export type CachedLink = {
   keyword: string
-  kind: 'redirect' | 'tree'
+  kind: 'redirect' | 'tree' | 'alias'
   url: string
+  target?: string
   description: string
   hits: number
 }
@@ -52,7 +53,7 @@ export function buildLookupMap(links: CachedLink[]): Map<string, CachedLink> {
     for (let i = 1; i < segments.length; i++) {
       const keyword = segments.slice(0, i).join('/')
       if (!map.has(keyword)) {
-        map.set(keyword, { keyword, kind: 'tree', url: '', description: '', hits: 0 })
+        map.set(keyword, { keyword, kind: 'tree', url: '', target: '', description: '', hits: 0 })
       }
     }
   }

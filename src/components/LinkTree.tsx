@@ -25,7 +25,7 @@ function buildTree(links: Link[], rootKeyword: string): TreeNode {
 }
 
 function countRedirects(node: TreeNode): number {
-  return (node.link?.kind === 'redirect' ? 1 : 0) + [...node.children.values()].reduce((total, child) => total + countRedirects(child), 0)
+  return (node.link && node.link.kind !== 'tree' ? 1 : 0) + [...node.children.values()].reduce((total, child) => total + countRedirects(child), 0)
 }
 
 function domain(url: string) {
@@ -44,8 +44,8 @@ function Node({ node, isOwner, isLast, ancestorContinues, isRoot = false }: {
   const isGroup = node.link?.kind === 'tree' || !node.link
   const count = isGroup ? countRedirects(node) : 0
   const countLabel = `${count} ${count === 1 ? 'link' : 'links'}`
-  const label = isGroup ? node.link?.description || 'Group of links' : [domain(node.link?.url ?? ''), node.link?.description].filter(Boolean).join(' · ')
-  const destination = isGroup ? '' : domain(node.link!.url)
+  const label = isGroup ? node.link?.description || 'Group of links' : node.link?.kind === 'alias' ? [`→ go/${node.link.target}`, node.link.description].filter(Boolean).join(' · ') : [domain(node.link?.url ?? ''), node.link?.description].filter(Boolean).join(' · ')
+  const destination = isGroup ? '' : node.link?.kind === 'alias' ? `alias to go/${node.link.target}` : domain(node.link!.url)
 
   return (
     <div>
@@ -55,8 +55,8 @@ function Node({ node, isOwner, isLast, ancestorContinues, isRoot = false }: {
           <span className={`gl-tree-elbow ${isLast ? 'gl-tree-elbow-last' : ''}`} />
         </span>}
         <div className={`gl-tree-content${hasChildren ? ' gl-tree-parent' : ''}`}>
-          <a href={node.link ? linkHref(node.link) : `/${node.path}`} onClick={() => { if (!isGroup) queueHit(node.path) }} aria-label={`Open go/${node.path}${destination ? `, ${destination}` : ', group'}`} className="gl-tree-link">
-            <span className="gl-tree-glyph" aria-hidden="true">{isGroup ? '▣' : '↗'}</span>
+          <a href={node.link ? linkHref(node.link) : `/${node.path}`} onClick={() => { if (node.link?.kind === 'redirect') queueHit(node.path) }} aria-label={`Open go/${node.path}${destination ? `, ${destination}` : ', group'}`} className="gl-tree-link">
+            <span className="gl-tree-glyph" aria-hidden="true">{isGroup ? '▣' : node.link?.kind === 'alias' ? '→' : '↗'}</span>
             <span className="gl-tree-main"><span className="gl-tree-name">{node.segment}</span><span className="gl-tree-detail">{label}</span></span>
             {isGroup && <span className="gl-tree-count">{countLabel}</span>}
             <span className="gl-tree-arrow" aria-hidden="true">{isGroup ? '›' : '↗'}</span>

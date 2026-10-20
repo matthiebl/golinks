@@ -13,7 +13,7 @@ export default function TreePage({ keyword }: { keyword: string }) {
   const saved = links.find((link) => link.keyword === keyword && link.kind === 'tree')
   const segments = keyword.split('/')
   const descendants = links.filter((link) => link.keyword.startsWith(`${keyword}/`))
-  const redirectCount = descendants.filter((link) => link.kind === 'redirect').length
+  const redirectCount = descendants.filter((link) => link.kind !== 'tree').length
 
   if (loading && !tree) return <div className="gl-page text-center gl-muted py-20">Loading group…</div>
   if (error) return <p className="gl-page text-center text-red-700 dark:text-red-300 py-12">Couldn’t load group: {error.message}</p>

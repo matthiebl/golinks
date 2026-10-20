@@ -43,6 +43,8 @@ function ResolveForPath({ pathname }: { pathname: string }) {
 
   if (destination.type === 'tree') return <TreePage keyword={destination.keyword} />
 
+  if (destination.type === 'broken-alias') return <section className="gl-page"><h1 className="gl-title font-mono">go/{destination.keyword}</h1><p role="alert" className="gl-subtitle mt-3">This alias points to go/{destination.target || '(missing target)'}, which is no longer a redirect link.</p><Link to="/-/all" className="gl-btn mt-6">Browse links</Link></section>
+
   if (destination.type !== 'create') {
     // 'home': nothing to show. 'redirect'/'google' are handled by
     // performRedirect above and never reach state, but TS can't see that.
@@ -69,6 +71,6 @@ function MissingLink({ keyword }: { keyword: string }) {
         <a className="gl-btn" href={googleSearchUrl(keyword.split('/').join(' '))}>Search Google ↗</a>
       </div>
     </div>
-    {nearby.length > 0 && <div className="mt-12"><div className="gl-section-heading"><h2>Nearby links</h2></div><div className="gl-card overflow-hidden">{nearby.map((link) => <a key={link.keyword} href={linkHref(link)} onClick={() => { if (link.kind !== 'tree') queueHit(link.keyword) }} className="gl-row no-underline text-inherit"><span className="min-w-0 flex-1"><span className="font-mono font-semibold text-sm">go/{link.keyword}</span><span className="block text-xs gl-muted mt-1 truncate">{link.description || (link.kind === 'tree' ? 'Group of links' : link.url)}</span></span>{link.kind === 'tree' && <span className="gl-pill">GROUP</span>}<span className="gl-muted">{link.kind === 'tree' ? '›' : '↗'}</span></a>)}</div></div>}
+    {nearby.length > 0 && <div className="mt-12"><div className="gl-section-heading"><h2>Nearby links</h2></div><div className="gl-card overflow-hidden">{nearby.map((link) => <a key={link.keyword} href={linkHref(link)} onClick={() => { if (link.kind === 'redirect') queueHit(link.keyword) }} className="gl-row no-underline text-inherit"><span className="min-w-0 flex-1"><span className="font-mono font-semibold text-sm">go/{link.keyword}</span><span className="block text-xs gl-muted mt-1 truncate">{link.description || (link.kind === 'tree' ? 'Group of links' : link.kind === 'alias' ? `→ go/${link.target}` : link.url)}</span></span>{link.kind === 'tree' && <span className="gl-pill">GROUP</span>}{link.kind === 'alias' && <span className="gl-pill">ALIAS</span>}<span className="gl-muted">{link.kind === 'tree' ? '›' : '↗'}</span></a>)}</div></div>}
   </section>
 }

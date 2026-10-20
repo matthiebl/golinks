@@ -26,6 +26,11 @@ keyword does not exist, the suggestions offer to create `go/<keyword>` with the 
 alongside the Google search option. Creating and editing links require the owner's sign-in.
 
 Resolution supports:
+- **Aliases** — `go/yt` can point to the saved redirect `go/youtube`, and
+  `go/stream/disney` can point to `go/disney`. Aliases follow changes to the target URL,
+  pass along path segments and search arguments, and keep their own hit counts. Targets
+  must be saved redirects; aliases cannot point to groups or other aliases. If a target
+  is deleted or changed to another kind, the alias displays a clear error until edited.
 - **Tree pages** — `go/stream` shows the full nested hierarchy under that path, including
   `go/stream/disney` and deeper links such as `go/stream/music/playlists/focus`. All levels remain
   visible, with branch lines aligned beneath the centre of each parent icon. Missing parent keywords become browsable trees automatically, while saved
@@ -51,8 +56,9 @@ Firestore IDs can't contain slashes — see [src/lib/links.ts](src/lib/links.ts)
 ```ts
 {
   keyword: string       // e.g. "a/b/c" — lowercase, ".", "_", "-", "/" only
-  kind: 'redirect' | 'tree' // omitted on older records; treated as redirect
-  url: string           // redirect destination; may contain {*} or %s; empty for a tree
+  kind: 'redirect' | 'tree' | 'alias' // omitted on older records; treated as redirect
+  url: string           // redirect destination; may contain {*} or %s; empty otherwise
+  target: string        // target keyword for an alias; empty otherwise
   description: string   // optional
   createdAt, updatedAt: Timestamp
   hits: number

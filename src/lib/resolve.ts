@@ -5,8 +5,9 @@
 
 export type ResolvableLink = {
   keyword: string
-  kind?: 'redirect' | 'tree'
+  kind?: 'redirect' | 'tree' | 'alias'
   url: string
+  target?: string
 }
 
 export type Lookup = (candidateKeyword: string) => ResolvableLink | undefined
@@ -19,6 +20,7 @@ export type Destination =
   | { type: 'create'; keyword: string }
   | { type: 'google'; query: string }
   | { type: 'home' }
+  | { type: 'broken-alias'; keyword: string; target: string }
 
 type Match = { link: ResolvableLink; remainder: string }
 
@@ -73,6 +75,26 @@ export function buildDestinationUrl(url: string, remainder: string): string {
   return appendPathRemainder(url, remainder)
 }
 
+function resolveRedirect(link: ResolvableLink, remainder: string, lookup: Lookup): Destination {
+  if (link.kind === 'alias') {
+    const target = link.target ?? ''
+    const destination = lookup(target)
+    if (destination?.kind !== 'redirect') {
+      return { type: 'broken-alias', keyword: link.keyword, target }
+    }
+    return {
+      type: 'redirect',
+      url: buildDestinationUrl(destination.url, remainder),
+      matchedKeyword: link.keyword,
+    }
+  }
+  return {
+    type: 'redirect',
+    url: buildDestinationUrl(link.url, remainder),
+    matchedKeyword: link.keyword,
+  }
+}
+
 /**
  * Resolve a request path such as "/a/b/c" (site-search / direct-visit mode).
  * On a miss, `missMode` decides whether to land on the create form or
@@ -91,11 +113,7 @@ export function resolvePath(
     if (match.link.kind === 'tree') {
       if (!match.remainder) return { type: 'tree', keyword: match.link.keyword }
     } else {
-      return {
-        type: 'redirect',
-        url: buildDestinationUrl(match.link.url, match.remainder),
-        matchedKeyword: match.link.keyword,
-      }
+      return resolveRedirect(match.link, match.remainder, lookup)
     }
   }
 
@@ -126,11 +144,7 @@ export function resolveQuery(queryText: string, lookup: Lookup): Destination {
       return { type: 'google', query: trimmed }
     }
     const combined = [match.remainder, argText].filter(Boolean).join(' ')
-    return {
-      type: 'redirect',
-      url: buildDestinationUrl(match.link.url, combined),
-      matchedKeyword: match.link.keyword,
-    }
+    return resolveRedirect(match.link, combined, lookup)
   }
 
   return { type: 'google', query: trimmed }

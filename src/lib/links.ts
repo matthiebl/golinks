@@ -15,8 +15,9 @@ import { requeueHits, takePendingHits, type PendingHits } from './pendingHits'
 
 export type Link = {
   keyword: string
-  kind: 'redirect' | 'tree'
+  kind: 'redirect' | 'tree' | 'alias'
   url: string
+  target: string
   description: string
   createdAt: Timestamp | null
   updatedAt: Timestamp | null
@@ -69,8 +70,9 @@ export function validateUrl(url: string): string | null {
 function linkFromSnapshot(id: string, data: Record<string, unknown>): Link {
   return {
     keyword: decodeKey(id),
-    kind: data.kind === 'tree' ? 'tree' : 'redirect',
+    kind: data.kind === 'tree' || data.kind === 'alias' ? data.kind : 'redirect',
     url: (data.url as string) ?? '',
+    target: (data.target as string) ?? '',
     description: (data.description as string) ?? '',
     createdAt: (data.createdAt as Timestamp) ?? null,
     updatedAt: (data.updatedAt as Timestamp) ?? null,
@@ -88,8 +90,9 @@ export async function getLink(keyword: string): Promise<Link | null> {
 
 export async function createLink(input: {
   keyword: string
-  kind: 'redirect' | 'tree'
+  kind: 'redirect' | 'tree' | 'alias'
   url: string
+  target?: string
   description?: string
 }): Promise<void> {
   const keyword = normalizeKeyword(input.keyword)
@@ -99,6 +102,8 @@ export async function createLink(input: {
     const urlErr = validateUrl(input.url)
     if (urlErr) throw new Error(urlErr)
   }
+  const target = input.kind === 'alias' ? normalizeKeyword(input.target ?? '') : ''
+  if (input.kind === 'alias') await validateAliasTarget(keyword, target)
 
   const ref = doc(db, COLLECTION, encodeKey(keyword))
   const existing = await getDoc(ref)
@@ -108,7 +113,8 @@ export async function createLink(input: {
 
   await setDoc(ref, {
     kind: input.kind,
-    url: input.kind === 'tree' ? '' : input.url.trim(),
+    url: input.kind === 'redirect' ? input.url.trim() : '',
+    target,
     description: input.description?.trim() ?? '',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -119,24 +125,37 @@ export async function createLink(input: {
 
 export async function updateLink(
   keyword: string,
-  input: { kind: 'redirect' | 'tree'; url: string; description?: string },
+  input: { kind: 'redirect' | 'tree' | 'alias'; url: string; target?: string; description?: string },
 ): Promise<void> {
   if (input.kind === 'redirect') {
     const urlErr = validateUrl(input.url)
     if (urlErr) throw new Error(urlErr)
   }
+  const target = input.kind === 'alias' ? normalizeKeyword(input.target ?? '') : ''
+  if (input.kind === 'alias') await validateAliasTarget(keyword, target)
 
   const ref = doc(db, COLLECTION, encodeKey(keyword))
   await setDoc(
     ref,
     {
       kind: input.kind,
-      url: input.kind === 'tree' ? '' : input.url.trim(),
+      url: input.kind === 'redirect' ? input.url.trim() : '',
+      target,
       description: input.description?.trim() ?? '',
       updatedAt: serverTimestamp(),
     },
     { merge: true },
   )
+}
+
+async function validateAliasTarget(keyword: string, target: string): Promise<void> {
+  if (validateKeyword(target) || target === keyword) {
+    throw new Error('Choose a different, existing redirect link as the alias target.')
+  }
+  const link = await getLink(target)
+  if (link?.kind !== 'redirect') {
+    throw new Error(`go/${target} is not an existing redirect link.`)
+  }
 }
 
 export async function deleteLink(keyword: string): Promise<void> {

@@ -9,12 +9,12 @@ import { buildDestinationUrl, googleSearchUrl, resolveQuery, type Lookup } from 
 type Props = { links: Link[]; lookup: Lookup }
 
 type Option =
-  | { type: 'link'; keyword: string; kind: 'redirect' | 'tree'; url: string; description: string }
+  | { type: 'link'; keyword: string; kind: 'redirect' | 'tree' | 'alias'; url: string; target?: string; description: string }
   | { type: 'create'; keyword: string }
   | { type: 'google'; query: string }
 
 function openLink(option: Extract<Option, { type: 'link' }>) {
-  if (option.kind === 'tree') {
+  if (option.kind === 'tree' || option.kind === 'alias') {
     window.location.assign(`/${option.keyword}`)
   } else {
     queueHit(option.keyword)
@@ -36,6 +36,7 @@ export default function SearchBar({ links, lookup }: Props) {
     ? searchable.filter((link) =>
         link.keyword.includes(term) ||
         link.description.toLowerCase().includes(term) ||
+        (link.target ?? '').includes(term) ||
         link.url.toLowerCase().includes(term),
       ).slice(0, 6)
     : []
@@ -66,6 +67,8 @@ export default function SearchBar({ links, lookup }: Props) {
       queueHit(dest.matchedKeyword)
       window.location.assign(dest.url)
     } else if (dest.type === 'tree') {
+      window.location.assign(`/${dest.keyword}`)
+    } else if (dest.type === 'broken-alias') {
       window.location.assign(`/${dest.keyword}`)
     } else if (dest.type === 'google') {
       window.location.assign(googleSearchUrl(dest.query))
@@ -112,8 +115,9 @@ export default function SearchBar({ links, lookup }: Props) {
             >
               {option.type === 'link' ? (
                 <>
-                  <span className="min-w-0 flex-1"><span className="block font-mono font-semibold">go/{option.keyword}</span><span className="block truncate text-xs gl-muted mt-1">{option.description || (option.kind === 'tree' ? 'Group of links' : option.url)}</span></span>
+                  <span className="min-w-0 flex-1"><span className="block font-mono font-semibold">go/{option.keyword}</span><span className="block truncate text-xs gl-muted mt-1">{option.description || (option.kind === 'tree' ? 'Group of links' : option.kind === 'alias' ? `→ go/${option.target}` : option.url)}</span></span>
                   {option.kind === 'tree' && <span className="gl-pill">GROUP</span>}
+                  {option.kind === 'alias' && <span className="gl-pill">ALIAS</span>}
                   <span className="gl-muted">{option.kind === 'tree' ? '›' : '↗'}</span>
                 </>
               ) : option.type === 'create' ? (

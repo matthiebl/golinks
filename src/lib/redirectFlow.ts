@@ -21,10 +21,11 @@ export async function resolveAndConfirm(kind: ResolveKind, text: string): Promis
     if (dest.type === 'redirect') return dest
   }
 
-  const links = (await fetchAllLinks()).map(({ keyword, kind, url, description, hits }) => ({
+  const links = (await fetchAllLinks()).map(({ keyword, kind, url, target, description, hits }) => ({
     keyword,
     kind,
     url,
+    target,
     description,
     hits,
   }))
