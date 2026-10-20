@@ -21,10 +21,19 @@ Two Chrome entry points, both handled by the same app:
    redirects; a miss lands on the home page prefilled to create that keyword, with a
    "search Google instead" button. See Settings to instead have a miss go straight to Google.
 
+The app home page has a search box for keywords, descriptions, and destinations. When a searched
+keyword does not exist, the suggestions offer to create `go/<keyword>` with the name prefilled,
+alongside the Google search option. Creating and editing links require the owner's sign-in.
+
 Resolution supports:
+- **Tree pages** — `go/stream` shows the full nested hierarchy under that path, including
+  `go/stream/disney` and deeper links such as `go/stream/music/playlists/focus`. All levels remain
+  visible, with branch lines aligned beneath the centre of each parent icon. Missing parent keywords become browsable trees automatically, while saved
+  tree records can have descriptions or be empty. Trees can be nested to any depth. A saved
+  redirect at a parent keeps redirecting until it is converted to a tree.
 - **Longest-prefix matching** — `go/a/b/c` and `go/a/b/d` can both exist under `go/a/b`; visiting
   `go/a/b/anything-else` falls back to `a/b`'s URL with `/anything-else` appended if `a/b` has its
-  own link and no more specific match exists.
+  own redirect and no more specific match exists. A tree stops fallback through that path.
 - **`{*}` / `%s` substitution** — a link's URL can contain `{*}` or `%s`, e.g.
   `https://github.com/search?q={*}`, and the remaining words/path get substituted in.
 - **Usage counts** — each redirect bumps a hit counter (fire-and-forget; never delays the redirect).
@@ -42,13 +51,17 @@ Firestore IDs can't contain slashes — see [src/lib/links.ts](src/lib/links.ts)
 ```ts
 {
   keyword: string       // e.g. "a/b/c" — lowercase, ".", "_", "-", "/" only
-  url: string           // may contain {*} or %s
+  kind: 'redirect' | 'tree' // omitted on older records; treated as redirect
+  url: string           // redirect destination; may contain {*} or %s; empty for a tree
   description: string   // optional
   createdAt, updatedAt: Timestamp
   hits: number
   lastUsedAt: Timestamp | null
 }
 ```
+
+Deleting a saved tree record does not delete its children. If children remain, the path is still
+available as an automatically derived tree.
 
 ## Setup
 
@@ -115,14 +128,15 @@ src/
     useLinks.ts           # Live Firestore subscription + cache sync
   components/
     SearchBar.tsx        # Home page search/jump box
-    LinkForm.tsx          # Create/edit form
-    LinkTree.tsx           # Nested tree view of keywords split on "/"
+    LinkForm.tsx          # Validated create/edit form
+    LinkTree.tsx          # Full-depth folder view with icon-aligned branches
     AuthButton.tsx          # Sign in/out
   pages/
-    Home.tsx              # Search + create + tree; also handles ?q= and ?new=
+    Home.tsx              # Focused search; handles ?q= and redirects legacy ?new=
+    NewLink.tsx           # /-/new — dedicated create page, accepts keyword prefill
     Resolve.tsx             # Catch-all route: resolves any other path as a keyword
     EditLink.tsx              # /-/edit/<keyword>
-    AllLinks.tsx               # /-/all — flat sortable list
+    AllLinks.tsx               # /-/all — searchable list and tree views
     Settings.tsx                # /-/settings — miss behavior, Chrome setup, account
 ```
 

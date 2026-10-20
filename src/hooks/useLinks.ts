@@ -13,6 +13,7 @@ export function useLinks() {
     if (!cached) return []
     return cached.map((c) => ({
       keyword: c.keyword,
+      kind: c.kind,
       url: c.url,
       description: c.description,
       hits: c.hits,
@@ -32,6 +33,7 @@ export function useLinks() {
         setError(null)
         const cacheable: CachedLink[] = next.map((l) => ({
           keyword: l.keyword,
+          kind: l.kind,
           url: l.url,
           description: l.description,
           hits: l.hits,
@@ -47,7 +49,7 @@ export function useLinks() {
   }, [])
 
   const lookupMap = buildLookupMap(
-    links.map((l) => ({ keyword: l.keyword, url: l.url, description: l.description, hits: l.hits })),
+    links.map((l) => ({ keyword: l.keyword, kind: l.kind, url: l.url, description: l.description, hits: l.hits })),
   )
 
   return { links, loading, error, lookupMap }

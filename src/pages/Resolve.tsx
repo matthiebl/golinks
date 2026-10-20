@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth'
+import { useLinks } from '../hooks/useLinks'
 import { performRedirect, resolveAndConfirm } from '../lib/redirectFlow'
 import { googleSearchUrl, type Destination } from '../lib/resolve'
+import { linkHref } from '../lib/linkHref'
+import { queueHit } from '../lib/pendingHits'
+import TreePage from './TreePage'
 
 export default function Resolve() {
   const location = useLocation()
@@ -36,31 +41,34 @@ function ResolveForPath({ pathname }: { pathname: string }) {
     )
   }
 
+  if (destination.type === 'tree') return <TreePage keyword={destination.keyword} />
+
   if (destination.type !== 'create') {
     // 'home': nothing to show. 'redirect'/'google' are handled by
     // performRedirect above and never reach state, but TS can't see that.
     return null
   }
 
-  // destination.type === 'create' — nothing matched, offer to add it.
-  return (
-    <section className="max-w-lg mx-auto text-center py-12">
-      <p className="text-sm text-gray-400 dark:text-gray-600 mb-2">No link found for</p>
-      <h1 className="font-mono text-2xl font-semibold mb-8">go/{destination.keyword}</h1>
-      <div className="flex flex-col sm:flex-row gap-3 justify-center">
-        <Link
-          to={`/?new=${encodeURIComponent(destination.keyword)}`}
-          className="bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-700 dark:hover:bg-gray-200 transition-colors"
-        >
-          Create this link
-        </Link>
-        <a
-          href={googleSearchUrl(destination.keyword.split('/').join(' '))}
-          className="border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        >
-          Search Google instead
-        </a>
+  return <MissingLink keyword={destination.keyword} />
+}
+
+function MissingLink({ keyword }: { keyword: string }) {
+  const { isOwner, signIn } = useAuth()
+  const { lookupMap } = useLinks()
+  const prefix = keyword.split('/')[0]
+  const nearby = [...lookupMap.values()]
+    .filter((link) => link.keyword !== keyword && (link.keyword.startsWith(`${prefix}/`) || link.keyword.includes(keyword)))
+    .sort((a, b) => a.keyword.localeCompare(b.keyword))
+    .slice(0, 3)
+
+  return <section className="gl-page">
+    <nav className="gl-breadcrumb" aria-label="Breadcrumb"><Link to="/">Search</Link> / No match</nav>
+    <div className="pt-6"><span className="gl-pill">NO MATCH</span><h1 className="gl-title font-mono mt-4">go/{keyword}</h1><p className="gl-subtitle mt-3 max-w-xl">There isn’t a link at this path yet. Create it, try a nearby link, or search the web.</p>
+      <div className="flex flex-wrap gap-3 mt-6">
+        {isOwner ? <Link className="gl-btn gl-btn-primary" to={`/-/new?keyword=${encodeURIComponent(keyword)}`}>+ Create go/{keyword}</Link> : <button className="gl-btn gl-btn-primary" onClick={() => void signIn().catch(() => {})}>Sign in to create</button>}
+        <a className="gl-btn" href={googleSearchUrl(keyword.split('/').join(' '))}>Search Google ↗</a>
       </div>
-    </section>
-  )
+    </div>
+    {nearby.length > 0 && <div className="mt-12"><div className="gl-section-heading"><h2>Nearby links</h2></div><div className="gl-card overflow-hidden">{nearby.map((link) => <a key={link.keyword} href={linkHref(link)} onClick={() => { if (link.kind !== 'tree') queueHit(link.keyword) }} className="gl-row no-underline text-inherit"><span className="min-w-0 flex-1"><span className="font-mono font-semibold text-sm">go/{link.keyword}</span><span className="block text-xs gl-muted mt-1 truncate">{link.description || (link.kind === 'tree' ? 'Group of links' : link.url)}</span></span>{link.kind === 'tree' && <span className="gl-pill">GROUP</span>}<span className="gl-muted">{link.kind === 'tree' ? '›' : '↗'}</span></a>)}</div></div>}
+  </section>
 }

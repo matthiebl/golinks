@@ -9,12 +9,14 @@
 
 export type CachedLink = {
   keyword: string
+  kind: 'redirect' | 'tree'
   url: string
   description: string
   hits: number
 }
 
-const CACHE_KEY = 'golinks.cache.v1'
+const CACHE_KEY = 'golinks.cache.v2'
+const CACHE_MAX_AGE_MS = 5 * 60 * 1000
 
 type CacheEntry = { at: number; links: CachedLink[] }
 
@@ -32,7 +34,8 @@ export function readCache(): CachedLink[] | null {
     const raw = localStorage.getItem(CACHE_KEY)
     if (!raw) return null
     const entry = JSON.parse(raw) as CacheEntry
-    if (!entry || !Array.isArray(entry.links)) return null
+    if (!entry || !Array.isArray(entry.links) || !Number.isFinite(entry.at)) return null
+    if (Date.now() - entry.at > CACHE_MAX_AGE_MS) return null
     return entry.links
   } catch {
     return null
@@ -43,6 +46,15 @@ export function buildLookupMap(links: CachedLink[]): Map<string, CachedLink> {
   const map = new Map<string, CachedLink>()
   for (const link of links) {
     map.set(link.keyword.toLowerCase(), link)
+  }
+  for (const link of links) {
+    const segments = link.keyword.toLowerCase().split('/')
+    for (let i = 1; i < segments.length; i++) {
+      const keyword = segments.slice(0, i).join('/')
+      if (!map.has(keyword)) {
+        map.set(keyword, { keyword, kind: 'tree', url: '', description: '', hits: 0 })
+      }
+    }
   }
   return map
 }

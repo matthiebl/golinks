@@ -21,8 +21,9 @@ export async function resolveAndConfirm(kind: ResolveKind, text: string): Promis
     if (dest.type === 'redirect') return dest
   }
 
-  const links = (await fetchAllLinks()).map(({ keyword, url, description, hits }) => ({
+  const links = (await fetchAllLinks()).map(({ keyword, kind, url, description, hits }) => ({
     keyword,
+    kind,
     url,
     description,
     hits,
@@ -34,7 +35,7 @@ export async function resolveAndConfirm(kind: ResolveKind, text: string): Promis
 /**
  * Acts on a resolved destination when it's a redirect or a Google fallback.
  * Returns true if it navigated away (caller should render nothing further);
- * false for 'create' or 'home', which the caller renders itself.
+ * false for 'create', 'tree', or 'home', which the caller renders itself.
  */
 export function performRedirect(dest: Destination): boolean {
   if (dest.type === 'redirect') {

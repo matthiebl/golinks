@@ -7,6 +7,7 @@ import {
   type Lookup,
   type ResolvableLink,
 } from './resolve'
+import { buildLookupMap, type CachedLink } from './cache'
 
 const LINKS: Record<string, ResolvableLink> = {
   gh: { keyword: 'gh', url: 'https://github.com' },
@@ -153,5 +154,49 @@ describe('resolveQuery', () => {
 describe('googleSearchUrl', () => {
   it('encodes the query', () => {
     expect(googleSearchUrl('a b c')).toBe('https://www.google.com/search?q=a%20b%20c')
+  })
+})
+
+describe('tree links', () => {
+  const treeLinks: CachedLink[] = [
+    { keyword: 'stream/disney', kind: 'redirect', url: 'https://disney.com', description: '', hits: 0 },
+    { keyword: 'stream/netflix', kind: 'redirect', url: 'https://netflix.com', description: '', hits: 0 },
+    { keyword: 'stream/music/spotify', kind: 'redirect', url: 'https://spotify.com', description: '', hits: 0 },
+    { keyword: 'other', kind: 'redirect', url: 'https://other.com', description: '', hits: 0 },
+  ]
+
+  it('derives parent trees and opens nested trees', () => {
+    const map = buildLookupMap(treeLinks)
+    const lookup: Lookup = (key) => map.get(key)
+    expect(resolvePath('/stream', lookup)).toEqual({ type: 'tree', keyword: 'stream' })
+    expect(resolvePath('/stream/music', lookup)).toEqual({ type: 'tree', keyword: 'stream/music' })
+    expect(resolveQuery('stream', lookup)).toEqual({ type: 'tree', keyword: 'stream' })
+    expect(resolveQuery('stream music', lookup)).toEqual({ type: 'google', query: 'stream music' })
+    expect(resolvePath('/stream/music/spotify', lookup)).toEqual({
+      type: 'redirect', url: 'https://spotify.com', matchedKeyword: 'stream/music/spotify',
+    })
+  })
+
+  it('allows an explicit empty tree', () => {
+    const map = buildLookupMap([{ keyword: 'empty', kind: 'tree', url: '', description: 'Empty tree', hits: 0 }])
+    expect(resolvePath('/empty', (key) => map.get(key))).toEqual({ type: 'tree', keyword: 'empty' })
+  })
+
+  it('keeps an existing redirect at a parent and stops fallback at a tree', () => {
+    const map = buildLookupMap([
+      ...treeLinks,
+      { keyword: 'stream', kind: 'redirect', url: 'https://stream.example', description: '', hits: 0 },
+      { keyword: 'stream/music', kind: 'tree', url: '', description: '', hits: 0 },
+    ])
+    const lookup: Lookup = (key) => map.get(key)
+    expect(resolvePath('/stream', lookup)).toEqual({
+      type: 'redirect', url: 'https://stream.example', matchedKeyword: 'stream',
+    })
+    expect(resolvePath('/stream/music/unknown', lookup)).toEqual({
+      type: 'create', keyword: 'stream/music/unknown',
+    })
+    expect(resolvePath('/stream/music/unknown', lookup, 'google')).toEqual({
+      type: 'google', query: 'stream music unknown',
+    })
   })
 })

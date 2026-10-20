@@ -5,6 +5,7 @@
 
 export type ResolvableLink = {
   keyword: string
+  kind?: 'redirect' | 'tree'
   url: string
 }
 
@@ -14,6 +15,7 @@ export type MissMode = 'create' | 'google'
 
 export type Destination =
   | { type: 'redirect'; url: string; matchedKeyword: string }
+  | { type: 'tree'; keyword: string }
   | { type: 'create'; keyword: string }
   | { type: 'google'; query: string }
   | { type: 'home' }
@@ -86,10 +88,14 @@ export function resolvePath(
 
   const match = matchSegments(segments, lookup)
   if (match) {
-    return {
-      type: 'redirect',
-      url: buildDestinationUrl(match.link.url, match.remainder),
-      matchedKeyword: match.link.keyword,
+    if (match.link.kind === 'tree') {
+      if (!match.remainder) return { type: 'tree', keyword: match.link.keyword }
+    } else {
+      return {
+        type: 'redirect',
+        url: buildDestinationUrl(match.link.url, match.remainder),
+        matchedKeyword: match.link.keyword,
+      }
     }
   }
 
@@ -115,6 +121,10 @@ export function resolveQuery(queryText: string, lookup: Lookup): Destination {
 
   const match = matchSegments(segments, lookup)
   if (match) {
+    if (match.link.kind === 'tree') {
+      if (!match.remainder && !argText) return { type: 'tree', keyword: match.link.keyword }
+      return { type: 'google', query: trimmed }
+    }
     const combined = [match.remainder, argText].filter(Boolean).join(' ')
     return {
       type: 'redirect',

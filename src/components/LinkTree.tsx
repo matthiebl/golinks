@@ -1,150 +1,86 @@
 import { Link as RouterLink } from 'react-router-dom'
 import type { Link } from '../lib/links'
-import { deleteLink } from '../lib/links'
+import { linkHref } from '../lib/linkHref'
+import { queueHit } from '../lib/pendingHits'
 
-type TreeNode = {
-  segment: string
-  path: string
-  link?: Link
-  children: Map<string, TreeNode>
-}
+type TreeNode = { segment: string; path: string; link?: Link; children: Map<string, TreeNode> }
 
-function buildTree(links: Link[]): TreeNode {
-  const root: TreeNode = { segment: '', path: '', children: new Map() }
+function buildTree(links: Link[], rootKeyword: string): TreeNode {
+  const root: TreeNode = { segment: rootKeyword.split('/').at(-1) ?? '', path: rootKeyword, children: new Map() }
+  const prefix = rootKeyword ? `${rootKeyword}/` : ''
   for (const link of links) {
-    const segments = link.keyword.split('/')
+    if (rootKeyword && !link.keyword.startsWith(prefix)) continue
+    const suffix = rootKeyword ? link.keyword.slice(prefix.length) : link.keyword
     let node = root
-    let path = ''
-    for (const segment of segments) {
+    let path = rootKeyword
+    for (const segment of suffix.split('/')) {
       path = path ? `${path}/${segment}` : segment
-      let next = node.children.get(segment)
-      if (!next) {
-        next = { segment, path, children: new Map() }
-        node.children.set(segment, next)
-      }
-      node = next
+      let child = node.children.get(segment)
+      if (!child) { child = { segment, path, children: new Map() }; node.children.set(segment, child) }
+      node = child
     }
     node.link = link
   }
   return root
 }
 
-function sortedChildren(node: TreeNode): TreeNode[] {
-  return Array.from(node.children.values()).sort((a, b) => a.segment.localeCompare(b.segment))
+function countRedirects(node: TreeNode): number {
+  return (node.link?.kind === 'redirect' ? 1 : 0) + [...node.children.values()].reduce((total, child) => total + countRedirects(child), 0)
 }
 
-function FolderIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      className="w-4 h-4 text-gray-400 dark:text-gray-600 shrink-0"
-    >
-      <path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h4.379a1.5 1.5 0 0 1 1.06.44l1.122 1.12A1.5 1.5 0 0 0 12.12 6H19.5A1.5 1.5 0 0 1 21 7.5v11A1.5 1.5 0 0 1 19.5 20h-15A1.5 1.5 0 0 1 3 18.5v-13Z" />
-    </svg>
-  )
+function domain(url: string) {
+  try { return new URL(url).hostname } catch { return url }
 }
 
-function LinkRow({ link, isOwner }: { link: Link; isOwner: boolean }) {
-  async function handleDelete() {
-    if (!window.confirm(`Delete go/${link.keyword}? This can't be undone.`)) return
-    try {
-      await deleteLink(link.keyword)
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : 'Failed to delete link.')
-    }
-  }
+function Node({ node, isOwner, isLast, ancestorContinues, isRoot = false }: {
+  node: TreeNode
+  isOwner: boolean
+  isLast: boolean
+  ancestorContinues: boolean[]
+  isRoot?: boolean
+}) {
+  const children = [...node.children.values()].sort((a, b) => a.segment.localeCompare(b.segment))
+  const hasChildren = children.length > 0
+  const isGroup = node.link?.kind === 'tree' || !node.link
+  const count = isGroup ? countRedirects(node) : 0
+  const countLabel = `${count} ${count === 1 ? 'link' : 'links'}`
+  const label = isGroup ? node.link?.description || 'Group of links' : [domain(node.link?.url ?? ''), node.link?.description].filter(Boolean).join(' · ')
+  const destination = isGroup ? '' : domain(node.link!.url)
 
   return (
-    <div className="flex items-center justify-between gap-3 py-1.5 px-2 rounded hover:bg-gray-50 dark:hover:bg-gray-900 group/row">
-      <div className="min-w-0 flex items-baseline gap-2">
-        <a
-          href={`/${link.keyword}`}
-          className="font-mono text-sm text-gray-900 dark:text-gray-100 hover:underline shrink-0"
-        >
-          go/{link.keyword}
-        </a>
-        {link.description && (
-          <span className="text-xs text-gray-400 dark:text-gray-600 truncate">
-            {link.description}
-          </span>
-        )}
+    <div>
+      <div className="gl-tree-row">
+        {!isRoot && <span className="gl-tree-prefix" aria-hidden="true">
+          {ancestorContinues.map((continues, index) => <span key={index} className={`gl-tree-rail ${continues ? 'gl-tree-rail-continued' : ''}`} />)}
+          <span className={`gl-tree-elbow ${isLast ? 'gl-tree-elbow-last' : ''}`} />
+        </span>}
+        <div className={`gl-tree-content${hasChildren ? ' gl-tree-parent' : ''}`}>
+          <a href={node.link ? linkHref(node.link) : `/${node.path}`} onClick={() => { if (!isGroup) queueHit(node.path) }} aria-label={`Open go/${node.path}${destination ? `, ${destination}` : ', group'}`} className="gl-tree-link">
+            <span className="gl-tree-glyph" aria-hidden="true">{isGroup ? '▣' : '↗'}</span>
+            <span className="gl-tree-main"><span className="gl-tree-name">{node.segment}</span><span className="gl-tree-detail">{label}</span></span>
+            {isGroup && <span className="gl-tree-count">{countLabel}</span>}
+            <span className="gl-tree-arrow" aria-hidden="true">{isGroup ? '›' : '↗'}</span>
+          </a>
+          {isOwner && node.link && <RouterLink to={`/-/edit/${node.path}?from=${encodeURIComponent(window.location.pathname)}`} className="gl-text-link text-xs px-2 py-2 shrink-0">Edit</RouterLink>}
+          {isOwner && isGroup && !node.link && <RouterLink to={`/-/new?keyword=${encodeURIComponent(node.path)}&kind=tree&from=${encodeURIComponent(window.location.pathname)}`} className="gl-text-link text-xs px-2 py-2 shrink-0">Describe</RouterLink>}
+        </div>
       </div>
-      <div className="flex items-center gap-3 shrink-0">
-        <span className="text-xs text-gray-300 dark:text-gray-700 tabular-nums">
-          {link.hits} {link.hits === 1 ? 'hit' : 'hits'}
-        </span>
-        {isOwner && (
-          <span className="flex items-center gap-2 opacity-0 group-hover/row:opacity-100 transition-opacity">
-            <RouterLink
-              to={`/-/edit/${link.keyword}`}
-              className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
-            >
-              Edit
-            </RouterLink>
-            <button
-              onClick={handleDelete}
-              className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400"
-            >
-              Delete
-            </button>
-          </span>
-        )}
-      </div>
+      {hasChildren && <div>
+        {children.map((child, index) => <Node
+          key={child.path}
+          node={child}
+          isOwner={isOwner}
+          isLast={index === children.length - 1}
+          ancestorContinues={isRoot ? [] : [...ancestorContinues, !isLast]}
+        />)}
+      </div>}
     </div>
   )
 }
 
-function Node({ node, isOwner }: { node: TreeNode; isOwner: boolean }) {
-  const children = sortedChildren(node)
-
-  if (children.length === 0) {
-    // Built only from real links, so a leaf always carries one.
-    return <LinkRow link={node.link!} isOwner={isOwner} />
-  }
-
-  return (
-    <details className="group" open>
-      <summary className="cursor-pointer select-none list-none flex items-center gap-2 py-1.5 px-2 rounded hover:bg-gray-50 dark:hover:bg-gray-900">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          className="w-3 h-3 text-gray-400 dark:text-gray-600 transition-transform group-open:rotate-90 shrink-0"
-        >
-          <path d="M9 6l6 6-6 6V6z" />
-        </svg>
-        <FolderIcon />
-        <span className="font-mono text-sm">{node.segment}</span>
-      </summary>
-      <div className="ml-5 border-l border-gray-200 dark:border-gray-800 pl-3">
-        {node.link && <LinkRow link={node.link} isOwner={isOwner} />}
-        {children.map((child) => (
-          <Node key={child.path} node={child} isOwner={isOwner} />
-        ))}
-      </div>
-    </details>
-  )
-}
-
-export default function LinkTree({ links, isOwner }: { links: Link[]; isOwner: boolean }) {
-  if (links.length === 0) {
-    return (
-      <p className="text-sm text-gray-400 dark:text-gray-600 text-center py-8">
-        No links yet — create your first one above.
-      </p>
-    )
-  }
-
-  const root = buildTree(links)
-  const topLevel = sortedChildren(root)
-
-  return (
-    <div className="space-y-0.5">
-      {topLevel.map((node) => (
-        <Node key={node.path} node={node} isOwner={isOwner} />
-      ))}
-    </div>
-  )
+export default function LinkTree({ links, isOwner, rootKeyword = '' }: { links: Link[]; isOwner: boolean; rootKeyword?: string }) {
+  const root = buildTree(links, rootKeyword)
+  const children = [...root.children.values()].sort((a, b) => a.segment.localeCompare(b.segment))
+  if (!children.length) return <div className="gl-card p-7 text-center text-sm gl-muted">{rootKeyword ? 'This group is empty.' : 'No links yet.'}</div>
+  return <div className="gl-card gl-tree" aria-label={rootKeyword ? `All descendants of go/${rootKeyword}` : 'All links as a tree'}>{children.map((node, index) => <Node key={node.path} node={node} isOwner={isOwner} isLast={index === children.length - 1} ancestorContinues={[]} isRoot />)}</div>
 }

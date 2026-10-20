@@ -1,116 +1,54 @@
-import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import LinkForm, { type LinkFormValues } from '../components/LinkForm'
-import LinkTree from '../components/LinkTree'
+import { useEffect } from 'react'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import SearchBar from '../components/SearchBar'
-import { useAuth } from '../hooks/useAuth'
 import { useLinks } from '../hooks/useLinks'
 import { performRedirect, resolveAndConfirm } from '../lib/redirectFlow'
-import { createLink } from '../lib/links'
 import type { Lookup } from '../lib/resolve'
+import { linkHref } from '../lib/linkHref'
+import { queueHit } from '../lib/pendingHits'
+
+function destinationLabel(url: string) {
+  try { return new URL(url).hostname } catch { return url }
+}
 
 export default function Home() {
-  const { isOwner } = useAuth()
   const { links, loading, error, lookupMap } = useLinks()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [showCreate, setShowCreate] = useState(false)
+  const [params] = useSearchParams()
+  const queryParam = params.get('q')
+  const prefill = params.get('new')
 
-  const queryParam = searchParams.get('q')
-  const prefillKeyword = searchParams.get('new') ?? ''
-
-  // Default-search-engine mode: go.mhiebl.com/?q=%s. A hit redirects away
-  // immediately; a miss forwards to Google. Neither outcome renders here.
   useEffect(() => {
     if (!queryParam) return
     let cancelled = false
     resolveAndConfirm('query', queryParam).then((dest) => {
-      if (!cancelled) performRedirect(dest)
+      if (cancelled) return
+      if (dest.type === 'tree') window.location.replace(`/${dest.keyword}`)
+      else performRedirect(dest)
     })
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [queryParam])
 
+  if (queryParam) return <div className="gl-page text-center gl-muted py-20">Searching for <span className="font-mono">{queryParam}</span>…</div>
+  if (prefill !== null) return <Navigate replace to={`/-/new?keyword=${encodeURIComponent(prefill)}${params.get('kind') === 'tree' ? '&kind=tree' : ''}`} />
+
   const lookup: Lookup = (key) => lookupMap.get(key)
-
-  function clearParam(name: string) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev)
-      next.delete(name)
-      return next
-    })
-  }
-
-  async function handleCreate(values: LinkFormValues) {
-    await createLink(values)
-    setShowCreate(false)
-    clearParam('new')
-  }
-
-  const creating = showCreate || Boolean(prefillKeyword)
-
-  if (queryParam) {
-    return (
-      <div className="text-center text-gray-400 dark:text-gray-600 py-24">
-        Searching for <span className="font-mono">{queryParam}</span>…
-      </div>
-    )
-  }
+  const recent = [...links].filter((link) => link.kind === 'redirect' && link.lastUsedAt)
+    .sort((a, b) => (b.lastUsedAt?.toMillis() ?? 0) - (a.lastUsedAt?.toMillis() ?? 0)).slice(0, 4)
+  const useful = recent.length ? recent : [...links].filter((link) => link.kind === 'redirect')
+    .sort((a, b) => b.hits - a.hits).slice(0, 4)
 
   return (
-    <div className="max-w-2xl mx-auto space-y-10">
-      <section>
-        <h1 className="text-3xl font-bold text-center mb-6 font-mono">go/</h1>
-        <SearchBar links={links} lookup={lookup} />
-      </section>
-
-      {isOwner && (
-        <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
-          {creating ? (
-            <>
-              <h2 className="font-semibold mb-4">New link</h2>
-              <LinkForm
-                mode="create"
-                initial={{ keyword: prefillKeyword }}
-                onSubmit={handleCreate}
-                onCancel={() => {
-                  setShowCreate(false)
-                  clearParam('new')
-                }}
-              />
-            </>
-          ) : (
-            <button
-              onClick={() => setShowCreate(true)}
-              className="w-full text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-            >
-              + New link
-            </button>
-          )}
-        </section>
-      )}
-
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold">All links</h2>
-          {links.length > 0 && (
-            <Link
-              to="/-/all"
-              className="text-xs text-gray-400 dark:text-gray-600 hover:text-gray-900 dark:hover:text-gray-100"
-            >
-              View as list
-            </Link>
-          )}
-        </div>
-        {error ? (
-          <p className="text-sm text-red-500 dark:text-red-400 text-center py-8">
-            Couldn't load links: {error.message}
-          </p>
-        ) : loading ? (
-          <p className="text-sm text-gray-400 dark:text-gray-600 text-center py-8">Loading…</p>
-        ) : (
-          <LinkTree links={links} isOwner={isOwner} />
-        )}
+    <div className="gl-page">
+      <h1 className="gl-title">Find a link</h1>
+      <p className="gl-subtitle mt-2 mb-7">Type a keyword or search your saved links.</p>
+      <SearchBar links={links} lookup={lookup} />
+      <section className="mt-12">
+        <div className="gl-section-heading"><h2>{recent.length ? 'Recently useful' : 'Frequently used'}</h2><Link className="gl-text-link" to="/-/all">Browse all links →</Link></div>
+        {error ? <p className="gl-muted text-sm">Couldn’t load links: {error.message}</p> : loading && !links.length ? <p className="gl-muted text-sm">Loading links…</p> : useful.length ? (
+          <div className="gl-card overflow-hidden">
+            {useful.map((link) => <a key={link.keyword} href={linkHref(link)} onClick={() => queueHit(link.keyword)} className="gl-row no-underline text-inherit"><span className="min-w-0 flex-1"><span className="font-mono font-semibold text-sm">go/{link.keyword}</span><span className="block truncate text-xs gl-muted mt-1">{link.description || destinationLabel(link.url)}</span></span><span className="text-sm gl-muted">↗</span></a>)}
+          </div>
+        ) : <div className="gl-card p-7 text-center text-sm gl-muted">No links yet. Use New link to create your first shortcut.</div>}
       </section>
     </div>
   )

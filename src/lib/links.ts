@@ -15,6 +15,7 @@ import { requeueHits, takePendingHits, type PendingHits } from './pendingHits'
 
 export type Link = {
   keyword: string
+  kind: 'redirect' | 'tree'
   url: string
   description: string
   createdAt: Timestamp | null
@@ -68,6 +69,7 @@ export function validateUrl(url: string): string | null {
 function linkFromSnapshot(id: string, data: Record<string, unknown>): Link {
   return {
     keyword: decodeKey(id),
+    kind: data.kind === 'tree' ? 'tree' : 'redirect',
     url: (data.url as string) ?? '',
     description: (data.description as string) ?? '',
     createdAt: (data.createdAt as Timestamp) ?? null,
@@ -86,14 +88,17 @@ export async function getLink(keyword: string): Promise<Link | null> {
 
 export async function createLink(input: {
   keyword: string
+  kind: 'redirect' | 'tree'
   url: string
   description?: string
 }): Promise<void> {
   const keyword = normalizeKeyword(input.keyword)
   const keywordErr = validateKeyword(keyword)
   if (keywordErr) throw new Error(keywordErr)
-  const urlErr = validateUrl(input.url)
-  if (urlErr) throw new Error(urlErr)
+  if (input.kind === 'redirect') {
+    const urlErr = validateUrl(input.url)
+    if (urlErr) throw new Error(urlErr)
+  }
 
   const ref = doc(db, COLLECTION, encodeKey(keyword))
   const existing = await getDoc(ref)
@@ -102,7 +107,8 @@ export async function createLink(input: {
   }
 
   await setDoc(ref, {
-    url: input.url.trim(),
+    kind: input.kind,
+    url: input.kind === 'tree' ? '' : input.url.trim(),
     description: input.description?.trim() ?? '',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -113,16 +119,19 @@ export async function createLink(input: {
 
 export async function updateLink(
   keyword: string,
-  input: { url: string; description?: string },
+  input: { kind: 'redirect' | 'tree'; url: string; description?: string },
 ): Promise<void> {
-  const urlErr = validateUrl(input.url)
-  if (urlErr) throw new Error(urlErr)
+  if (input.kind === 'redirect') {
+    const urlErr = validateUrl(input.url)
+    if (urlErr) throw new Error(urlErr)
+  }
 
   const ref = doc(db, COLLECTION, encodeKey(keyword))
   await setDoc(
     ref,
     {
-      url: input.url.trim(),
+      kind: input.kind,
+      url: input.kind === 'tree' ? '' : input.url.trim(),
       description: input.description?.trim() ?? '',
       updatedAt: serverTimestamp(),
     },
